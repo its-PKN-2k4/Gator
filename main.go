@@ -1,14 +1,22 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
+	"time"
+
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 
 	"github.com/its-PKN-2k4/Gator/internal/config"
+	"github.com/its-PKN-2k4/Gator/internal/database"
 )
 
 type state struct {
+	db     *database.Queries
 	cfgPtr *config.Config
 }
 
@@ -40,6 +48,10 @@ func main() {
 		cmds.register("login", handlerLogin)
 	}
 
+	if _, exist := cmds.allCmds["register"]; !exist {
+		cmds.register("register", handlerRegister)
+	}
+
 	args := os.Args
 	if len(args) < 2 {
 		log.Fatalf("Fewer than 2 arguments are provided. Needs at least 2 arguments")
@@ -51,24 +63,21 @@ func main() {
 		args: args[2:],
 	}
 
+	db, err := sql.Open("postgres", currState.cfgPtr.DBURL)
+	if err != nil {
+		fmt.Printf("Encountered error while opening connection to database: %v", err)
+		os.Exit(1)
+	}
+	dbQueries := database.New(db)
+
+	currState.db = dbQueries
+
 	err1 := cmds.run(&currState, cmd)
 	if err1 != nil {
 		fmt.Print(err1.Error())
 		os.Exit(1)
 	}
-}
 
-func handlerLogin(s *state, cmd command) error {
-	if len(cmd.args) == 0 {
-		return fmt.Errorf("This command needs 1 argument: username\n")
-	}
-
-	err := s.cfgPtr.SetUser(cmd.args[0])
-	if err != nil {
-		return fmt.Errorf("Couldn't set current user for login: %v\n", err)
-	}
-	fmt.Printf("User has been set to: %v\n", s.cfgPtr.CurrentUserName)
-	return nil
 }
 
 func (c *commands) run(s *state, cmd command) error {
@@ -92,4 +101,63 @@ func (c *commands) register(name string, f func(*state, command) error) {
 	} else {
 		fmt.Printf("Cannot register command '%v' as new command since it already exists\n", name)
 	}
+}
+
+func handlerLogin(s *state, cmd command) error {
+	if len(cmd.args) == 0 {
+		return fmt.Errorf("This command needs 1 argument: username\n")
+	}
+
+	_, err0 := s.db.GetUser(context.Background(), cmd.args[0])
+	switch err0 {
+	case sql.ErrNoRows:
+		return fmt.Errorf("No user with name <%v> exists to login", cmd.args[0])
+	case nil:
+		break
+	default:
+		return fmt.Errorf("Database operation malfunctioned: %v", err0)
+	}
+
+	err := s.cfgPtr.SetUser(cmd.args[0])
+	if err != nil {
+		return fmt.Errorf("Couldn't set current user for login: %v\n", err)
+	}
+	fmt.Printf("User has been set to: %v\n", s.cfgPtr.CurrentUserName)
+	return nil
+}
+
+func handlerRegister(s *state, cmd command) error {
+	if len(cmd.args) == 0 {
+		return fmt.Errorf("This command needs 1 argument: username\n")
+	}
+
+	_, err0 := s.db.GetUser(context.Background(), cmd.args[0])
+	switch err0 {
+	case nil:
+		return fmt.Errorf("This username <%v> has already been registered", cmd.args[0])
+	case sql.ErrNoRows:
+		break
+	default:
+		return fmt.Errorf("Database operation malfunctioned: %v", err0)
+	}
+
+	newUser, err := s.db.CreateUser(context.Background(), database.CreateUserParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      cmd.args[0],
+	})
+	if err != nil {
+		return fmt.Errorf("Couldn't register new user with username <%v>", cmd.args[0])
+	}
+
+	s.cfgPtr.CurrentUserName = newUser.Name
+	fmt.Printf("New user has been registered\n: %+v", newUser)
+
+	err1 := s.cfgPtr.SetUser(cmd.args[0])
+	if err1 != nil {
+		return fmt.Errorf("Couldn't set current user for login: %v\n", err1)
+	}
+	fmt.Printf("User has been set to: %v\n", s.cfgPtr.CurrentUserName)
+	return nil
 }
