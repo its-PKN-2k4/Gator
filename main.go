@@ -52,6 +52,14 @@ func main() {
 		cmds.register("register", handlerRegister)
 	}
 
+	if _, exist := cmds.allCmds["reset"]; !exist {
+		cmds.register("reset", handlerResetUsers)
+	}
+
+	if _, exist := cmds.allCmds["users"]; !exist {
+		cmds.register("users", handlerGetAllUsers)
+	}
+
 	args := os.Args
 	if len(args) < 2 {
 		log.Fatalf("Fewer than 2 arguments are provided. Needs at least 2 arguments")
@@ -159,5 +167,36 @@ func handlerRegister(s *state, cmd command) error {
 		return fmt.Errorf("Couldn't set current user for login: %v\n", err1)
 	}
 	fmt.Printf("User has been set to: %v\n", s.cfgPtr.CurrentUserName)
+	return nil
+}
+
+func handlerResetUsers(s *state, cmd command) error {
+	err := s.db.ResetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("Encountered error while deleting entries from [users] table: %v", err)
+	}
+
+	fmt.Print("Successfully delete all entries from [users] table")
+	return nil
+}
+
+func handlerGetAllUsers(s *state, cmd command) error {
+	users, err := s.db.GetAllUsers(context.Background())
+	switch err {
+	case sql.ErrNoRows:
+		return fmt.Errorf("No entries exist in [users] table")
+	case nil:
+		break
+	default:
+		return fmt.Errorf("Error encountered while getting users from [users] table: %v", err)
+	}
+
+	for _, user := range users {
+		if user.Name == s.cfgPtr.CurrentUserName {
+			fmt.Printf("* %v (current)\n", user.Name)
+		} else {
+			fmt.Printf("* %v\n", user.Name)
+		}
+	}
 	return nil
 }
