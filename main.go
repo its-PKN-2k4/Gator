@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error reading config: %v", err)
 	}
-	fmt.Printf("Read config: %+v\n", cfg)
+	//fmt.Printf("Read config: %+v\n", cfg)
 
 	currState := state{
 		cfgPtr: &cfg,
@@ -66,6 +66,10 @@ func main() {
 
 	if _, exist := cmds.allCmds["addfeed"]; !exist {
 		cmds.register("addfeed", handlerCreateFeed)
+	}
+
+	if _, exist := cmds.allCmds["feeds"]; !exist {
+		cmds.register("feeds", handlerGetFeeds)
 	}
 
 	args := os.Args
@@ -248,5 +252,22 @@ func handlerCreateFeed(s *state, cmd command) error {
 	}
 
 	fmt.Printf("Created feed: %+v\n", feed)
+	return nil
+}
+
+func handlerGetFeeds(s *state, cmd command) error {
+	feedsList, err := s.db.GetFeeds(context.Background())
+	switch err {
+	case sql.ErrNoRows:
+		return fmt.Errorf("No entries exist in [feeds] table")
+	case nil:
+		break
+	default:
+		return fmt.Errorf("Error encountered while getting feeds from [feeds] table: %v", err)
+	}
+
+	for _, feed := range feedsList {
+		fmt.Printf("%+v\n", feed)
+	}
 	return nil
 }
