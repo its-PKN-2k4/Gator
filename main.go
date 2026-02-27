@@ -60,6 +60,14 @@ func main() {
 		cmds.register("users", handlerGetAllUsers)
 	}
 
+	if _, exist := cmds.allCmds["agg"]; !exist {
+		cmds.register("agg", handlerFetchFeed)
+	}
+
+	if _, exist := cmds.allCmds["addfeed"]; !exist {
+		cmds.register("addfeed", handlerCreateFeed)
+	}
+
 	args := os.Args
 	if len(args) < 2 {
 		log.Fatalf("Fewer than 2 arguments are provided. Needs at least 2 arguments")
@@ -198,5 +206,47 @@ func handlerGetAllUsers(s *state, cmd command) error {
 			fmt.Printf("* %v\n", user.Name)
 		}
 	}
+	return nil
+}
+
+func handlerFetchFeed(s *state, cmd command) error {
+	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return fmt.Errorf("Error encountered while extracting XML content from given URL: %w", err)
+	}
+
+	fmt.Printf("Feed: %+v\n", feed)
+	return nil
+}
+
+func handlerCreateFeed(s *state, cmd command) error {
+	if len(cmd.args) < 2 {
+		return fmt.Errorf("This command needs 2 argument: feed_name url\n")
+	}
+
+	currUser, err0 := s.db.GetUser(context.Background(), s.cfgPtr.CurrentUserName)
+	switch err0 {
+	case nil:
+		break
+	case sql.ErrNoRows:
+		return fmt.Errorf("Current User's name: %v DOES NOT match with any entry", err0)
+	default:
+		return fmt.Errorf("Database operation malfunctioned: %v", err0)
+	}
+
+	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      cmd.args[0],
+		Url:       cmd.args[1],
+		UserID:    currUser.ID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("Error encountered while creating feed: %w", err)
+	}
+
+	fmt.Printf("Created feed: %+v\n", feed)
 	return nil
 }
