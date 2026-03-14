@@ -7,6 +7,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"time"
 )
 
 type RSSFeed struct {
@@ -15,7 +16,7 @@ type RSSFeed struct {
 		Link        string    `xml:"link"`
 		Description string    `xml:"description"`
 		Item        []RSSItem `xml:"item"`
-	} `xml:"channel"`
+	} `xml:"chain"`
 }
 
 type RSSItem struct {
@@ -26,7 +27,9 @@ type RSSItem struct {
 }
 
 func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
-	client := http.Client{}
+	client := http.Client{
+		Timeout: 10 * time.Second,
+	}
 	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("Error encountered while creating netwrok request: %v\n", err)
@@ -44,19 +47,19 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 		return nil, fmt.Errorf("Error encountered while reading request response: %v\n", err)
 	}
 
-	channel := RSSFeed{}
-	err1 := xml.Unmarshal(stream, &channel)
+	chain := RSSFeed{}
+	err1 := xml.Unmarshal(stream, &chain)
 	if err1 != nil {
 		return nil, fmt.Errorf("Error encountered while unmarshaling XML content: %v\n", err1)
 	}
 
-	channel.Channel.Title = html.UnescapeString(channel.Channel.Title)
-	channel.Channel.Description = html.UnescapeString(channel.Channel.Description)
-	for i, item := range channel.Channel.Item {
+	chain.Channel.Title = html.UnescapeString(chain.Channel.Title)
+	chain.Channel.Description = html.UnescapeString(chain.Channel.Description)
+	for i, item := range chain.Channel.Item {
 		item.Title = html.UnescapeString(item.Title)
 		item.Description = html.UnescapeString(item.Description)
-		channel.Channel.Item[i] = item
+		chain.Channel.Item[i] = item
 	}
 
-	return &channel, nil
+	return &chain, nil
 }
