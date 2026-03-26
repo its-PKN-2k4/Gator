@@ -20,19 +20,9 @@ func handlerFetchFeed(s *state, cmd command) error {
 	return nil
 }
 
-func handlerCreateFeed(s *state, cmd command) error {
+func handlerCreateFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.args) < 2 {
 		return fmt.Errorf("This command needs 2 argument: feed_name url\n")
-	}
-
-	currUser, err0 := s.db.GetUser(context.Background(), s.cfgPtr.CurrentUserName)
-	switch err0 {
-	case nil:
-		break
-	case sql.ErrNoRows:
-		return fmt.Errorf("Current User's name: %v DOES NOT match with any entry", err0)
-	default:
-		return fmt.Errorf("Database operation malfunctioned: %v", err0)
 	}
 
 	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
@@ -41,7 +31,7 @@ func handlerCreateFeed(s *state, cmd command) error {
 		UpdatedAt: time.Now(),
 		Name:      cmd.args[0],
 		Url:       cmd.args[1],
-		UserID:    currUser.ID,
+		UserID:    user.ID,
 	})
 
 	if err != nil {
@@ -52,7 +42,7 @@ func handlerCreateFeed(s *state, cmd command) error {
 		ID:        uuid.New(),
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
-		UserID:    currUser.ID,
+		UserID:    user.ID,
 		FeedID:    feed.ID,
 	})
 	if err != nil {
@@ -60,7 +50,7 @@ func handlerCreateFeed(s *state, cmd command) error {
 	}
 
 	fmt.Println("Feed created successfully:")
-	printFeed(feed, currUser)
+	printFeed(feed, user)
 	fmt.Println()
 	fmt.Println("Feed followed successfully:")
 	printFeedFollow(feedFollow.UserName, feedFollow.FeedName)
